@@ -378,10 +378,102 @@
         transform: rotate(360deg);
       }
     }
+
+    /* 비밀번호 오버레이 스타일 */
+    #auth-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(10px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+    }
+
+    .auth-container {
+      background: white;
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      max-width: 400px;
+      width: 90%;
+    }
+
+    .auth-container h2 {
+      margin-bottom: 20px;
+      color: #333;
+    }
+
+    .auth-container p {
+      color: #666;
+      margin-bottom: 30px;
+    }
+
+    .auth-input-group {
+      margin-bottom: 20px;
+    }
+
+    .auth-input {
+      width: 100%;
+      padding: 15px;
+      border: 2px solid #eee;
+      border-radius: 8px;
+      font-size: 24px;
+      text-align: center;
+      letter-spacing: 10px;
+      outline: none;
+      transition: border-color 0.3s;
+    }
+
+    .auth-input:focus {
+      border-color: #4285f4;
+    }
+
+    .auth-btn {
+      width: 100%;
+      padding: 15px;
+      background: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .auth-btn:hover {
+      background: #3367d6;
+    }
+
+    #auth-error {
+      color: #dc3545;
+      margin-top: 15px;
+      font-size: 14px;
+      display: none;
+    }
   </style>
 </head>
 
 <body>
+  <!-- 비밀번호 보호 오버레이 -->
+  <div id="auth-overlay" style="display: none;">
+    <div class="auth-container">
+      <h2>🔐 경기 관리 시스템</h2>
+      <p>시스템에 접속하려면 비밀번호가 필요합니다</p>
+      <div class="auth-input-group">
+        <input type="password" id="auth-password" class="auth-input" maxlength="4" placeholder="****">
+      </div>
+      <button onclick="verifyPassword()" class="auth-btn">접속하기</button>
+      <div id="auth-error">비밀번호가 올바르지 않습니다.</div>
+    </div>
+  </div>
+
   <div class="container">
     <div class="header">
       <h1>홀덤 경기 정보 입력</h1>
@@ -422,7 +514,7 @@
         <div class="form-group">
           <label for="apps-script-url">웹앱 URL:</label>
           <input type="url" id="apps-script-url"
-            value="https://script.google.com/macros/s/AKfycbwbkXv90q1oVR8EOSHUQrPkPaCxYrZX3Dx8TU8KMZOTRLcX7501nBXAkF5VrUR-EGI/exec"
+            value="https://script.google.com/macros/s/AKfycbw2SvFNwn9nB6DZAFMcNOfkQz6wLJD6iw4IfvFSQbHmhGb6_CcSJu12xJIXsowQAuuCfA/exec"
             placeholder="https://script.google.com/macros/s/AKfycb.../exec">
         </div>
 
@@ -753,6 +845,64 @@
     let lastParticipants = []; // 마지막 입력된 참가자 정보 저장
     let originalGameData = null; // 시트에서 가져온 원본 정보 (A)
     let editingGameData = null; // 로컬에서 편집 중인 정보 (B)
+
+    // 페이지 로드 시 즉시 권한 확인
+    (function () {
+      const isAuthorized = localStorage.getItem('holdem_manager_auth');
+      if (!isAuthorized) {
+        document.getElementById('auth-overlay').style.display = 'flex';
+      }
+    })();
+
+    async function verifyPassword() {
+      const passwordInput = document.getElementById('auth-password');
+      const password = passwordInput.value;
+      const errorDiv = document.getElementById('auth-error');
+      const appsScriptUrl = document.getElementById('apps-script-url').value.trim();
+
+      if (!appsScriptUrl) {
+        alert('웹앱 URL 설정이 필요합니다.');
+        return;
+      }
+
+      try {
+        errorDiv.style.display = 'none';
+        
+        const params = new URLSearchParams();
+        params.append('action', 'verifyPassword');
+        params.append('password', password.trim());
+
+        const response = await fetch(appsScriptUrl, {
+          method: 'POST',
+          body: params,
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          localStorage.setItem('holdem_manager_auth', 'true');
+          document.getElementById('auth-overlay').style.display = 'none';
+          showMessage('인증되었습니다.', 'success');
+        } else {
+          errorDiv.style.display = 'block';
+          passwordInput.value = '';
+          passwordInput.focus();
+        }
+      } catch (error) {
+        console.error('인증 오류:', error);
+        alert('인증 처리 중 오류가 발생했습니다.');
+      }
+    }
+
+    // 엔터키 지원
+    document.getElementById('auth-password').addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') {
+        verifyPassword();
+      }
+    });
 
     function showLoading(message = '경기 정보를 처리하고 있습니다') {
       const overlay = document.getElementById('loading-overlay');
@@ -4282,7 +4432,7 @@
         const appsScriptUrlInput = document.getElementById('apps-script-url');
         const sheetNameInput = document.getElementById('sheet-name');
         if (appsScriptUrlInput) {
-          appsScriptUrlInput.value = 'https://script.google.com/macros/s/AKfycbwbkXv90q1oVR8EOSHUQrPkPaCxYrZX3Dx8TU8KMZOTRLcX7501nBXAkF5VrUR-EGI/exec';
+          appsScriptUrlInput.value = 'https://script.google.com/macros/s/AKfycbw2SvFNwn9nB6DZAFMcNOfkQz6wLJD6iw4IfvFSQbHmhGb6_CcSJu12xJIXsowQAuuCfA/exec';
         }
         if (sheetNameInput) {
           sheetNameInput.value = 'Sheet1';
@@ -4322,7 +4472,7 @@
 
     // 페이지 로드 시 웹앱 URL 강제 업데이트
     setTimeout(() => {
-      const newWebAppUrl = "https://script.google.com/macros/s/AKfycbwbkXv90q1oVR8EOSHUQrPkPaCxYrZX3Dx8TU8KMZOTRLcX7501nBXAkF5VrUR-EGI/exec";
+      const newWebAppUrl = "https://script.google.com/macros/s/AKfycbw2SvFNwn9nB6DZAFMcNOfkQz6wLJD6iw4IfvFSQbHmhGb6_CcSJu12xJIXsowQAuuCfA/exec";
       const urlInput = document.getElementById('apps-script-url');
       if (urlInput && urlInput.value !== newWebAppUrl) {
         console.log('웹앱 URL 강제 업데이트:', urlInput.value, '→', newWebAppUrl);
@@ -4332,7 +4482,7 @@
     }, 100);
 
     // 웹앱 URL 자동 갱신 (새로운 URL로)
-    updateWebAppUrl('https://script.google.com/macros/s/AKfycbwbkXv90q1oVR8EOSHUQrPkPaCxYrZX3Dx8TU8KMZOTRLcX7501nBXAkF5VrUR-EGI/exec');
+    updateWebAppUrl('https://script.google.com/macros/s/AKfycbw2SvFNwn9nB6DZAFMcNOfkQz6wLJD6iw4IfvFSQbHmhGb6_CcSJu12xJIXsowQAuuCfA/exec');
 
     // 페이지 로드 시 접기/펼치기 상태 복원
     document.addEventListener('DOMContentLoaded', function () {
