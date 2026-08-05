@@ -1674,7 +1674,8 @@
     }
 
     // 리더보드 불러오기 함수
-    async function loadLeaderboard() {
+    // announce=false면 성공 메시지를 띄우지 않는다(갱신 직후 호출 시 갱신 결과를 덮어쓰지 않도록).
+    async function loadLeaderboard(announce = true) {
       const appsScriptUrl = document.getElementById('apps-script-url').value.trim();
 
       if (!appsScriptUrl) {
@@ -1700,7 +1701,9 @@
           if (data.success) {
             displayLeaderboardFromSheet(data.leaderboardData);
             document.getElementById('leaderboard-results').style.display = 'block';
-            showMessage(`리더보드를 성공적으로 불러왔습니다.`, 'success');
+            if (announce) {
+              showMessage(`리더보드를 성공적으로 불러왔습니다.`, 'success');
+            }
           } else {
             showMessage(`리더보드 불러오기 실패: ${data.message}`, 'error');
           }
@@ -1853,12 +1856,16 @@
               rankInfo = ` 순위 ${data.rankedCount}명 / ${INSUFFICIENT_GAMES_LABEL} ${data.unrankedCount}명 (기준 ${data.minGamesForRank}경기)`;
             }
 
-            showMessage(`리더보드 갱신 완료: ${data.processedGames}개 경기, ${data.totalParticipants}명.${rankInfo}`,
-              data.unrankedCount === undefined ? 'warning' : 'success');
+            const refreshSummary = `리더보드 갱신 완료: ${data.processedGames}개 경기, ${data.totalParticipants}명.${rankInfo}`;
+            const refreshLevel = data.unrankedCount === undefined ? 'warning' : 'success';
+            showMessage(refreshSummary, refreshLevel);
 
-            // 갱신 후 자동으로 리더보드 불러오기
+            // 갱신 후 자동으로 리더보드 불러오기.
+            // 불러오기가 자체 메시지를 띄우면 showMessage가 메시지 영역을 비우면서
+            // 위의 갱신 결과를 덮어써 버리므로, 조용히 불러온 뒤 갱신 결과를 다시 표시한다.
             setTimeout(async () => {
-              await loadLeaderboard();
+              await loadLeaderboard(false);
+              showMessage(refreshSummary, refreshLevel);
             }, 1000);
 
           } else {
@@ -3971,7 +3978,8 @@
     document.getElementById('view-game-details').addEventListener('click', viewGameDetails);
 
     // 리더보드 관련 이벤트 리스너
-    document.getElementById('load-leaderboard').addEventListener('click', loadLeaderboard);
+    // 화살표 함수로 감싸 MouseEvent가 announce 인자로 넘어가지 않게 한다
+    document.getElementById('load-leaderboard').addEventListener('click', () => loadLeaderboard());
     document.getElementById('refresh-leaderboard').addEventListener('click', refreshLeaderboard);
     document.getElementById('export-leaderboard').addEventListener('click', exportLeaderboard);
 
