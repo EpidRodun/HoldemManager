@@ -1759,16 +1759,30 @@
       html += '</thead>';
       html += '<tbody>';
 
+      // 순위는 시트의 순위 열 값을 신뢰하지 않고, 총 경기 수로 화면에서 직접 판정한다.
+      // (옛 백엔드가 시트에 숫자 순위를 써놨거나 저장된 URL이 옛 배포를 가리켜도
+      //  화면 표시는 항상 규칙대로 나온다. 백엔드는 정렬/캐시 용도로만 신뢰한다)
+      const gamesOf = (p) => parseInt(p.totalGames, 10) || 0;
+      const byScore = (a, b) => {
+        if ((b.totalScore || 0) !== (a.totalScore || 0)) return (b.totalScore || 0) - (a.totalScore || 0);
+        if ((b.wins || 0) !== (a.wins || 0)) return (b.wins || 0) - (a.wins || 0);
+        if ((b.secondPlaces || 0) !== (a.secondPlaces || 0)) return (b.secondPlaces || 0) - (a.secondPlaces || 0);
+        if ((b.thirdPlaces || 0) !== (a.thirdPlaces || 0)) return (b.thirdPlaces || 0) - (a.thirdPlaces || 0);
+        return gamesOf(b) - gamesOf(a);
+      };
+      const rankedList = leaderboardData.filter(p => gamesOf(p) >= MIN_GAMES_FOR_RANK).sort(byScore);
+      const unrankedList = leaderboardData.filter(p => gamesOf(p) < MIN_GAMES_FOR_RANK).sort(byScore);
+      const orderedList = rankedList.concat(unrankedList);
+
       let firstUnranked = true;
 
-      leaderboardData.forEach((participant) => {
-        // 순위는 시트의 순위 열 값을 그대로 쓴다.
-        // (이전에는 배열 순서로 다시 매겨서 시트에 기록된 "경기횟수부족"이 무시됐다)
-        const rankNumber = parseInt(participant.rank, 10);
-        const isRanked = Number.isFinite(rankNumber) && rankNumber > 0;
+      orderedList.forEach((participant, index) => {
+        // 앞쪽 rankedList.length명만 순위 부여, 나머지는 경기횟수 부족
+        const isRanked = index < rankedList.length;
+        const rankNumber = index + 1;
         const rankDisplay = isRanked
           ? (rankNumber <= 3 ? ['🥇', '🥈', '🥉'][rankNumber - 1] : `${rankNumber}`)
-          : splitLabelIntoLines(participant.rank || INSUFFICIENT_GAMES_LABEL);
+          : splitLabelIntoLines(INSUFFICIENT_GAMES_LABEL);
 
         // 순위 미부여 구간이 시작되는 지점에 구분선을 넣는다
         if (!isRanked && firstUnranked) {
