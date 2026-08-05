@@ -516,7 +516,7 @@
           <!-- 아래 value가 기본값이다. Apps Script를 재배포해 URL이 바뀌면 여기만 고치고,
                기존 브라우저에서는 "캐시 삭제"를 눌러 저장된 값을 지운다. -->
           <input type="url" id="apps-script-url"
-            value="https://script.google.com/macros/s/AKfycbwWj_w-8vtIs4Z03ALjef_I4eRrs81mq36Xj5ebyHZwX4msjYXxr1CCm1IFwUxNz9gXKw/exec"
+            value="https://script.google.com/macros/s/AKfycbx2IEkw6dp-eaYdeRJ8iTb5Gw6yg7XrdpGAWBHTB3yFmG1-M00LYPAoEBIhXAFldalZFA/exec"
             placeholder="https://script.google.com/macros/s/AKfycb.../exec">
         </div>
 
@@ -1749,12 +1749,14 @@
       html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">순위</th>';
       html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">참가자</th>';
       html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">총 경기</th>';
-      html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">총 참가횟수</th>';
+      html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">바이인 횟수</th>';
       html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">🥇 1등</th>';
       html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">🥈 2등</th>';
       html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">🥉 3등</th>';
       html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">승률</th>';
       html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">🏆 총 점수</th>';
+      html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">🎲 딜러 횟수</th>';
+      html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">🎁 무료 리바이</th>';
       html += '</tr>';
       html += '</thead>';
       html += '<tbody>';
@@ -1787,7 +1789,7 @@
         // 순위 미부여 구간이 시작되는 지점에 구분선을 넣는다
         if (!isRanked && firstUnranked) {
           firstUnranked = false;
-          html += `<tr><td colspan="9" style="border: 1px solid #dee2e6; padding: 8px 12px; background: #fff3cd; color: #856404; font-size: 12px; text-align: center;">
+          html += `<tr><td colspan="11" style="border: 1px solid #dee2e6; padding: 8px 12px; background: #fff3cd; color: #856404; font-size: 12px; text-align: center;">
             아래는 ${MIN_GAMES_FOR_RANK}경기 미만으로 순위가 부여되지 않은 참가자입니다
           </td></tr>`;
         }
@@ -1820,6 +1822,15 @@
         const totalScoreDisplay = totalScore % 1 === 0 ? totalScore.toString() : totalScore.toFixed(1);
 
         html += `<td style="border: 1px solid #dee2e6; padding: 12px; text-align: center; color: ${scoreColor}; font-weight: bold;">${totalScoreDisplay}</td>`;
+
+        // 딜러 통계 (백엔드 재계산값). 값이 0이면 흐리게 표시한다.
+        const dealerGames = parseInt(participant.dealerGames, 10) || 0;
+        const dealerBenefit = parseInt(participant.dealerBenefit, 10) || 0;
+        const dealerGamesColor = dealerGames > 0 ? (isRanked ? '#495057' : '#adb5bd') : '#ced4da';
+        const dealerBenefitColor = dealerBenefit > 0 ? (isRanked ? '#0d6efd' : '#adb5bd') : '#ced4da';
+
+        html += `<td style="border: 1px solid #dee2e6; padding: 12px; text-align: center; color: ${dealerGamesColor}; font-weight: bold;">${dealerGames}회</td>`;
+        html += `<td style="border: 1px solid #dee2e6; padding: 12px; text-align: center; color: ${dealerBenefitColor}; font-weight: bold;">${dealerBenefit}회</td>`;
         html += '</tr>';
       });
 
@@ -2576,7 +2587,7 @@
       html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">순위</th>';
       html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: left;">참가자</th>';
       html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">총 경기</th>';
-      html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">총 참가횟수</th>';
+      html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">바이인 횟수</th>';
       html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">🥇 1등</th>';
       html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">🥈 2등</th>';
       html += '<th style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">🥉 3등</th>';
