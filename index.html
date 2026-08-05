@@ -516,7 +516,7 @@
           <!-- 아래 value가 기본값이다. Apps Script를 재배포해 URL이 바뀌면 여기만 고치고,
                기존 브라우저에서는 "캐시 삭제"를 눌러 저장된 값을 지운다. -->
           <input type="url" id="apps-script-url"
-            value="https://script.google.com/macros/s/AKfycbwbt8xRwDwWL23NaKc33OaKXO0tTtgn-YmEStgLqFPy0Qfgu2qedrPCVtJMejpsgn9wBQ/exec"
+            value="https://script.google.com/macros/s/AKfycbwWj_w-8vtIs4Z03ALjef_I4eRrs81mq36Xj5ebyHZwX4msjYXxr1CCm1IFwUxNz9gXKw/exec"
             placeholder="https://script.google.com/macros/s/AKfycb.../exec">
         </div>
 
@@ -776,7 +776,8 @@
           1. 달력을 통해 경기 날짜를 선택합니다<br>
           2. 딜러 정보와 참가자 목록을 텍스트로 입력합니다<br>
           3. 참가자명 뒤의 + 기호 개수로 참가 횟수를 자동 계산합니다<br>
-          4. 한 번에 여러 경기를 빠르게 입력할 수 있습니다
+          4. 한 번에 여러 경기를 빠르게 입력할 수 있습니다<br>
+          5. 딜러가 리바이를 했으면 1회를 무료로 처리합니다 (리바이가 없으면 혜택 없음)
         </small>
       </div>
 
@@ -847,6 +848,15 @@
     let lastParticipants = []; // 마지막 입력된 참가자 정보 저장
     let originalGameData = null; // 시트에서 가져온 원본 정보 (A)
     let editingGameData = null; // 로컬에서 편집 중인 정보 (B)
+
+    // === 리더보드 순위 규칙 (backend.txt의 동일 상수와 값을 맞춰야 함) ===
+    // 총 경기 수가 이 값보다 적으면 순위를 부여하지 않고 최하단에 표시한다.
+    const MIN_GAMES_FOR_RANK = 5;
+    const INSUFFICIENT_GAMES_LABEL = '경기횟수부족';
+
+    // === 딜러 혜택 ===
+    // 딜러가 리바이를 했을 경우 이 횟수만큼 무료로 처리한다(리바이가 없으면 혜택 없음).
+    const DEALER_FREE_REBUYS = 1;
 
     // 페이지 로드 시 즉시 권한 확인
     (function () {
@@ -1707,6 +1717,17 @@
     }
 
     // leaderboard 시트 데이터를 표시하는 함수
+    // 순위 칸이 좁으므로 안내 라벨을 charsPerLine 글자씩 끊어 세로로 쌓아 표시한다.
+    // "경기횟수부족"을 4글자씩 끊으면 "경기횟수" / "부족" 두 줄이 된다.
+    // (시트에는 한 줄로 저장되고, 줄바꿈은 화면 표시용이다)
+    function splitLabelIntoLines(label, charsPerLine = 4) {
+      const text = String(label).replace(/\s/g, '');
+      if (!text) return '';
+
+      const chunks = text.match(new RegExp(`.{1,${charsPerLine}}`, 'g')) || [text];
+      return chunks.join('<br>');
+    }
+
     function displayLeaderboardFromSheet(leaderboardData) {
       const container = document.getElementById('leaderboard-container');
 
@@ -1735,22 +1756,48 @@
       html += '</thead>';
       html += '<tbody>';
 
-      leaderboardData.forEach((participant, index) => {
-        const rankEmoji = index < 3 ? ['🥇', '🥈', '🥉'][index] : `${index + 1}`;
+      let firstUnranked = true;
 
-        html += '<tr>';
-        html += `<td style="border: 1px solid #dee2e6; padding: 12px; text-align: center; font-weight: bold;">${rankEmoji}</td>`;
+      leaderboardData.forEach((participant) => {
+        // 순위는 시트의 순위 열 값을 그대로 쓴다.
+        // (이전에는 배열 순서로 다시 매겨서 시트에 기록된 "경기횟수부족"이 무시됐다)
+        const rankNumber = parseInt(participant.rank, 10);
+        const isRanked = Number.isFinite(rankNumber) && rankNumber > 0;
+        const rankDisplay = isRanked
+          ? (rankNumber <= 3 ? ['🥇', '🥈', '🥉'][rankNumber - 1] : `${rankNumber}`)
+          : splitLabelIntoLines(participant.rank || INSUFFICIENT_GAMES_LABEL);
+
+        // 순위 미부여 구간이 시작되는 지점에 구분선을 넣는다
+        if (!isRanked && firstUnranked) {
+          firstUnranked = false;
+          html += `<tr><td colspan="9" style="border: 1px solid #dee2e6; padding: 8px 12px; background: #fff3cd; color: #856404; font-size: 12px; text-align: center;">
+            아래는 ${MIN_GAMES_FOR_RANK}경기 미만으로 순위가 부여되지 않은 참가자입니다
+          </td></tr>`;
+        }
+
+        const rowStyle = isRanked ? '' : ' background: #f8f9fa; color: #adb5bd;';
+        const rankCellStyle = isRanked
+          ? 'text-align: center; font-weight: bold;'
+          // 표 본문(14px)보다 작게 하되 읽을 수 있는 크기로 둔다
+          : 'text-align: center; font-weight: normal; font-size: 11px; line-height: 1.3; color: #856404; white-space: nowrap;';
+        // 순위 미부여 행은 강조색을 빼고 흐리게 표시한다
+        const dim = (color) => isRanked ? color : '#adb5bd';
+        // 라벨을 줄여 표시하므로 전체 규칙은 마우스를 올렸을 때 보여준다
+        const rankTitle = isRanked ? '' : ` title="총 경기 ${MIN_GAMES_FOR_RANK}회 미만 - 순위 미부여"`;
+
+        html += `<tr style="${rowStyle}">`;
+        html += `<td style="border: 1px solid #dee2e6; padding: 12px; ${rankCellStyle}"${rankTitle}>${rankDisplay}</td>`;
         html += `<td style="border: 1px solid #dee2e6; padding: 12px; font-weight: bold;">${participant.name || '정보 없음'}</td>`;
         html += `<td style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">${participant.totalGames || 0}</td>`;
         html += `<td style="border: 1px solid #dee2e6; padding: 12px; text-align: center;">${participant.totalCount || 0}</td>`;
-        html += `<td style="border: 1px solid #dee2e6; padding: 12px; text-align: center; color: #ffc107; font-weight: bold;">${participant.wins || 0}</td>`;
-        html += `<td style="border: 1px solid #dee2e6; padding: 12px; text-align: center; color: #6c757d; font-weight: bold;">${participant.secondPlaces || 0}</td>`;
-        html += `<td style="border: 1px solid #dee2e6; padding: 12px; text-align: center; color: #fd7e14; font-weight: bold;">${participant.thirdPlaces || 0}</td>`;
-        html += `<td style="border: 1px solid #dee2e6; padding: 12px; text-align: center; color: #28a745; font-weight: bold;">${(parseFloat(participant.winRate || '0.0') * 100).toFixed(1)}%</td>`;
+        html += `<td style="border: 1px solid #dee2e6; padding: 12px; text-align: center; color: ${dim('#ffc107')}; font-weight: bold;">${participant.wins || 0}</td>`;
+        html += `<td style="border: 1px solid #dee2e6; padding: 12px; text-align: center; color: ${dim('#6c757d')}; font-weight: bold;">${participant.secondPlaces || 0}</td>`;
+        html += `<td style="border: 1px solid #dee2e6; padding: 12px; text-align: center; color: ${dim('#fd7e14')}; font-weight: bold;">${participant.thirdPlaces || 0}</td>`;
+        html += `<td style="border: 1px solid #dee2e6; padding: 12px; text-align: center; color: ${dim('#28a745')}; font-weight: bold;">${(parseFloat(participant.winRate || '0.0') * 100).toFixed(1)}%</td>`;
 
         // 점수 정보 추가
         const totalScore = participant.totalScore || 0;
-        const scoreColor = totalScore >= 0 ? '#28a745' : '#dc3545'; // 양수는 녹색, 음수는 빨간색
+        const scoreColor = dim(totalScore >= 0 ? '#28a745' : '#dc3545'); // 양수는 녹색, 음수는 빨간색
 
         // 총 점수 표시: 소수점이 있으면 첫째자리까지만, 없으면 정수로
         const totalScoreDisplay = totalScore % 1 === 0 ? totalScore.toString() : totalScore.toFixed(1);
@@ -1762,6 +1809,12 @@
       html += '</tbody>';
       html += '</table>';
       html += '</div>';
+
+      // 순위 규칙 안내
+      html += `<p style="color: #6c757d; font-size: 12px; margin-top: 10px;">
+        ※ 총 경기 ${MIN_GAMES_FOR_RANK}회 이상인 참가자에게만 순위를 부여합니다.
+        미달 참가자는 점수가 높아도 최하단에 "${INSUFFICIENT_GAMES_LABEL}"으로 표시됩니다.
+      </p>`;
 
       container.innerHTML = html;
     }
@@ -1791,7 +1844,17 @@
           const data = JSON.parse(result);
 
           if (data.success) {
-            showMessage(`리더보드가 성공적으로 갱신되었습니다. (${data.processedGames}개 경기 분석, ${data.totalParticipants}명 참가자)`, 'success');
+            // 최소 경기 규칙 적용 결과를 함께 보여준다.
+            // 응답에 관련 필드가 없으면 배포된 Apps Script가 옛 버전이라는 뜻이다.
+            let rankInfo;
+            if (data.unrankedCount === undefined) {
+              rankInfo = ` ⚠ 배포된 Apps Script가 최소 경기 규칙을 적용하지 않았습니다 (backend.txt 재배포 필요)`;
+            } else {
+              rankInfo = ` 순위 ${data.rankedCount}명 / ${INSUFFICIENT_GAMES_LABEL} ${data.unrankedCount}명 (기준 ${data.minGamesForRank}경기)`;
+            }
+
+            showMessage(`리더보드 갱신 완료: ${data.processedGames}개 경기, ${data.totalParticipants}명.${rankInfo}`,
+              data.unrankedCount === undefined ? 'warning' : 'success');
 
             // 갱신 후 자동으로 리더보드 불러오기
             setTimeout(async () => {
@@ -2003,9 +2066,17 @@
       let html = '<div style="margin-bottom: 15px;">';
       html += '<h5 style="color: #495057; margin-bottom: 10px;">📋 파싱된 경기 정보</h5>';
 
-      // 딜러 정보 표시
+      // 딜러 정보 + 무료 리바이 혜택 표시
+      const dealerBenefitInfo = calcDealerFreeRebuy(participants, dealerInfo);
+      const benefitText = dealerBenefitInfo.benefit > 0
+        ? `리바이 ${dealerBenefitInfo.rebuys}회 중 ${dealerBenefitInfo.benefit}회 무료 → +${dealerBenefitInfo.benefit}점`
+        : (dealerBenefitInfo.dealerParticipant
+          ? '리바이 없음 → 무료 리바이 혜택 없음'
+          : '참가하지 않음 → 혜택 없음 (참가자 기록에서 제외)');
+
       html += '<div style="margin-bottom: 15px; padding: 10px; background: #e7f3ff; border-radius: 4px; border-left: 4px solid #007bff;">';
       html += `<strong>딜러:</strong> ${dealerInfo}`;
+      html += `<div style="margin-top: 6px; font-size: 12px; color: #0d47a1;">🎁 딜러 혜택: ${benefitText}</div>`;
       html += '</div>';
 
       html += '<div style="overflow-x: auto;">';
@@ -2138,6 +2209,22 @@
       });
     }
 
+    // 딜러 무료 리바이 혜택 계산
+    // 미리보기와 실제 저장이 같은 규칙을 쓰도록 한 곳에 모아둔다.
+    // 참가횟수 = 바이인 수이므로 리바이 횟수는 count - 1, 리바이가 없으면 혜택 0.
+    function calcDealerFreeRebuy(participants, dealerName) {
+      const dealerParticipant = participants.find(p => p.name === dealerName);
+      const count = dealerParticipant ? dealerParticipant.count : 0;
+      const rebuys = Math.max(count - 1, 0);
+
+      return {
+        dealerParticipant: dealerParticipant,
+        count: count,
+        rebuys: rebuys,
+        benefit: Math.min(rebuys, DEALER_FREE_REBUYS)
+      };
+    }
+
     // 대량 경기 저장 함수
     async function saveBulkGame() {
       const gameDateInput = document.getElementById('bulk-game-date').value.trim();
@@ -2226,12 +2313,16 @@
         // 가중치 기반 점수 계산 (프론트엔드에서 직접 계산)
         const weights = { first: 50, second: 35, third: 15 };
         const totalGameScore = participants.reduce((sum, p) => sum + p.count, 0);
-        const dealerScore = 0.5;
-        const distributableScore = totalGameScore - dealerScore;
 
-        // 딜러 참가 횟수 찾기
-        const dealerParticipant = participants.find(p => p.name === dealerInfo);
-        const dealerCount = dealerParticipant ? dealerParticipant.count : 0;
+        // 딜러 혜택: 리바이를 했을 경우 DEALER_FREE_REBUYS 회까지 무료
+        const dealerBenefitInfo = calcDealerFreeRebuy(participants, dealerInfo);
+        const dealerParticipant = dealerBenefitInfo.dealerParticipant;
+        const dealerCount = dealerBenefitInfo.count;
+        const dealerRebuys = dealerBenefitInfo.rebuys;
+        const dealerScore = dealerBenefitInfo.benefit;
+
+        // 무료 처리된 리바이 금액은 판돈에 들어가지 않으므로 배분풀에서 뺀다
+        const distributableScore = totalGameScore - dealerScore;
 
         // 순위권 참가자 분리
         const rankedParticipants = participants.filter(p => p.rank && p.rank !== '');
@@ -2279,7 +2370,7 @@
         const finalFirstPlaceScore = firstPlaceParticipant ? firstPlaceScore - firstPlaceParticipant.count : 0;
         const finalSecondPlaceScore = secondPlaceParticipant ? secondPlaceScore - secondPlaceParticipant.count : 0;
         const finalThirdPlaceScore = thirdPlaceParticipant ? thirdPlaceScore - thirdPlaceParticipant.count : 0;
-        const finalDealerScore = dealerScore; // 딜러: 0.5점 보너스만
+        const finalDealerScore = dealerScore; // 딜러: 무료 리바이 횟수만큼 면제
 
         // 경기 총점에서 1,2,3등의 참가 횟수 차감
         const rankedParticipantsCount = (firstPlaceParticipant ? firstPlaceParticipant.count : 0) +
@@ -2301,31 +2392,19 @@
           }
         });
 
-        // 딜러가 참가자 목록에 없으면 추가
-        if (!dealerParticipant) {
-          participants.push({
-            name: dealerInfo,
-            count: 0,
-            rank: '',
-            calculatedScore: finalDealerScore
-          });
-        } else {
-          // 딜러가 참가자 목록에 있으면 딜러 보너스 추가
+        // 딜러가 참가자로 뛰었으면 무료 리바이만큼 점수를 되돌려준다.
+        // 참가하지 않은 딜러는 리바이가 없어 혜택도 0이므로 아예 기록하지 않는다.
+        // (참가횟수 0 행을 남기면 점수는 그대로면서 리더보드의 "총 경기"만 부풀었다)
+        if (dealerParticipant) {
           dealerParticipant.calculatedScore += finalDealerScore;
         }
 
-        // 딜러 점수 정보 추가
-        const dealerScoreInfo = {
-          name: dealerInfo,
-          calculatedScore: finalDealerScore
-        };
-
         console.log('=== 프론트엔드 점수 계산 결과 ===');
         console.log(`1. 총점 계산: 모든 참가자 참가 횟수 합계 = ${totalGameScore}`);
-        console.log(`2. 배분 가능 점수: ${totalGameScore} - 0.5(딜러 보너스) = ${distributableScore}`);
+        console.log(`2. 배분 가능 점수: ${totalGameScore} - ${dealerScore}(딜러 무료 리바이) = ${distributableScore}`);
         console.log(`3. 가중치 분배: 1등=${weights.first}%, 2등=${weights.second}%, 3등=${weights.third}%`);
         console.log(`4. 순위권 점수: 1등=${finalFirstPlaceScore}, 2등=${finalSecondPlaceScore}, 3등=${finalThirdPlaceScore}`);
-        console.log(`5. 딜러 보너스: ${finalDealerScore}점`);
+        console.log(`5. 딜러 혜택: 참가횟수 ${dealerCount}회(리바이 ${dealerRebuys}회) → ${finalDealerScore}점 면제`);
         console.log(`6. 딜러 참가자 존재 여부: ${dealerParticipant ? '있음' : '없음'}`);
         console.log(`7. 조정된 총점: ${adjustedTotalGameScore}`);
 

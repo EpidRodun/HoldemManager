@@ -1,2 +1,4 @@
 /backend.txt
 /backend_old.txt
+# 타임스탬프 백업 (backend_20260805_125819_old.txt 형태)
+/backend_*_old.txt
