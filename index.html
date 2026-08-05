@@ -513,8 +513,10 @@
       <div class="collapsible-content" id="spreadsheet-settings-content">
         <div class="form-group">
           <label for="apps-script-url">웹앱 URL:</label>
+          <!-- 아래 value가 기본값이다. Apps Script를 재배포해 URL이 바뀌면 여기만 고치고,
+               기존 브라우저에서는 "캐시 삭제"를 눌러 저장된 값을 지운다. -->
           <input type="url" id="apps-script-url"
-            value="https://script.google.com/macros/s/AKfycbw2SvFNwn9nB6DZAFMcNOfkQz6wLJD6iw4IfvFSQbHmhGb6_CcSJu12xJIXsowQAuuCfA/exec"
+            value="https://script.google.com/macros/s/AKfycbwbt8xRwDwWL23NaKc33OaKXO0tTtgn-YmEStgLqFPy0Qfgu2qedrPCVtJMejpsgn9wBQ/exec"
             placeholder="https://script.google.com/macros/s/AKfycb.../exec">
         </div>
 
@@ -3074,54 +3076,6 @@
     }
 
     // 모드 전환 기능
-    function switchMode(mode) {
-      const inputModeSection = document.getElementById('input-mode-section');
-      const queryModeSection = document.getElementById('query-mode-section');
-      const leaderboardModeSection = document.getElementById('leaderboard-mode-section');
-      const bulkInputModeSection = document.getElementById('bulk-input-mode-section');
-      const rankChangeModeSection = document.getElementById('rank-change-mode-section');
-
-      const inputModeBtn = document.getElementById('input-mode-btn');
-      const queryModeBtn = document.getElementById('query-mode-btn');
-      const leaderboardModeBtn = document.getElementById('leaderboard-mode-btn');
-      const bulkInputModeBtn = document.getElementById('bulk-input-mode-btn');
-      const rankChangeModeBtn = document.getElementById('rank-change-mode-btn');
-
-      // 모든 섹션 숨기기
-      inputModeSection.style.display = 'none';
-      queryModeSection.style.display = 'none';
-      leaderboardModeSection.style.display = 'none';
-      bulkInputModeSection.style.display = 'none';
-      rankChangeModeSection.style.display = 'none';
-
-      // 모든 버튼 비활성화 스타일
-      inputModeBtn.style.background = '#6c757d';
-      queryModeBtn.style.background = '#6c757d';
-      leaderboardModeBtn.style.background = '#6c757d';
-      bulkInputModeBtn.style.background = '#6c757d';
-      rankChangeModeBtn.style.background = '#6c757d';
-
-      if (mode === 'input') {
-        inputModeSection.style.display = 'block';
-        inputModeBtn.style.background = '#28a745';
-      } else if (mode === 'query') {
-        queryModeSection.style.display = 'block';
-        queryModeBtn.style.background = '#28a745';
-        if (isAutoQuery) {
-          updateLoadingMessage('조회 모드로 전환했습니다. 경기 목록을 불러오는 중입니다...');
-        }
-      } else if (mode === 'leaderboard') {
-        leaderboardModeSection.style.display = 'block';
-        leaderboardModeBtn.style.background = '#007bff';
-      } else if (mode === 'bulk-input') {
-        bulkInputModeSection.style.display = 'block';
-        bulkInputModeBtn.style.background = '#ffc107';
-      } else if (mode === 'rank-change') {
-        rankChangeModeSection.style.display = 'block';
-        rankChangeModeBtn.style.background = '#9c27b0';
-      }
-    }
-
     // 오늘 날짜를 기본값으로 설정
     function setDefaultDate() {
       const dateSelector = document.getElementById('date-selector');
@@ -4366,16 +4320,16 @@
 
     function restoreInputs() {
       try {
-        const appUrl = localStorage.getItem(STORAGE_KEYS.appsScriptUrl);
-        const name = localStorage.getItem(STORAGE_KEYS.sheetName);
+        // 저장된 값이 있으면 그것을 쓰고, 없으면 HTML의 value 속성(=input.defaultValue)을 그대로 둔다.
+        // (이전에는 저장값을 무시하고 매번 강제로 덮어써서 설정 필드가 무의미했다)
+        const urlInput = document.getElementById('apps-script-url');
+        const nameInput = document.getElementById('sheet-name');
 
-        // 새로운 웹앱 URL로 자동 갱신 (로컬 스토리지 무시하고 강제 업데이트)
-        const newWebAppUrl = "https://script.google.com/macros/s/AKfycbwbkXv90q1oVR8EOSHUQrPkPaCxYrZX3Dx8TU8KMZOTRLcX7501nBXAkF5VrUR-EGI/exec";
-        document.getElementById('apps-script-url').value = newWebAppUrl;
-        localStorage.setItem(STORAGE_KEYS.appsScriptUrl, newWebAppUrl);
+        const savedUrl = localStorage.getItem(STORAGE_KEYS.appsScriptUrl);
+        const savedName = localStorage.getItem(STORAGE_KEYS.sheetName);
 
-
-        if (name) document.getElementById('sheet-name').value = name;
+        if (savedUrl) urlInput.value = savedUrl;
+        if (savedName) nameInput.value = savedName;
         // gameTitle은 자동 생성되므로 복원하지 않음
       } catch (_) { }
     }
@@ -4390,16 +4344,6 @@
 
       // 캐시 삭제 버튼 이벤트 리스너
       document.getElementById('clear-cache-btn').addEventListener('click', clearAllCache);
-    }
-
-    // 웹앱 URL 자동 갱신 함수
-    function updateWebAppUrl(newUrl) {
-      const urlInput = document.getElementById('apps-script-url');
-      if (urlInput && newUrl) {
-        urlInput.value = newUrl;
-        console.log('웹앱 URL이 자동으로 갱신되었습니다:', newUrl);
-        showMessage('웹앱 URL이 성공적으로 갱신되었습니다!', 'success');
-      }
     }
 
     // 캐시 삭제 함수
@@ -4431,11 +4375,12 @@
         // 입력 필드 초기화
         const appsScriptUrlInput = document.getElementById('apps-script-url');
         const sheetNameInput = document.getElementById('sheet-name');
+        // defaultValue = HTML의 value 속성 값
         if (appsScriptUrlInput) {
-          appsScriptUrlInput.value = 'https://script.google.com/macros/s/AKfycbw2SvFNwn9nB6DZAFMcNOfkQz6wLJD6iw4IfvFSQbHmhGb6_CcSJu12xJIXsowQAuuCfA/exec';
+          appsScriptUrlInput.value = appsScriptUrlInput.defaultValue;
         }
         if (sheetNameInput) {
-          sheetNameInput.value = 'Sheet1';
+          sheetNameInput.value = sheetNameInput.defaultValue;
         }
 
         // 현재 경기 데이터 초기화
@@ -4470,20 +4415,6 @@
     restoreInputs();
     wireAutoSave();
 
-    // 페이지 로드 시 웹앱 URL 강제 업데이트
-    setTimeout(() => {
-      const newWebAppUrl = "https://script.google.com/macros/s/AKfycbw2SvFNwn9nB6DZAFMcNOfkQz6wLJD6iw4IfvFSQbHmhGb6_CcSJu12xJIXsowQAuuCfA/exec";
-      const urlInput = document.getElementById('apps-script-url');
-      if (urlInput && urlInput.value !== newWebAppUrl) {
-        console.log('웹앱 URL 강제 업데이트:', urlInput.value, '→', newWebAppUrl);
-        urlInput.value = newWebAppUrl;
-        localStorage.setItem(STORAGE_KEYS.appsScriptUrl, newWebAppUrl);
-      }
-    }, 100);
-
-    // 웹앱 URL 자동 갱신 (새로운 URL로)
-    updateWebAppUrl('https://script.google.com/macros/s/AKfycbw2SvFNwn9nB6DZAFMcNOfkQz6wLJD6iw4IfvFSQbHmhGb6_CcSJu12xJIXsowQAuuCfA/exec');
-
     // 페이지 로드 시 접기/펼치기 상태 복원
     document.addEventListener('DOMContentLoaded', function () {
       restoreCollapseStates();
@@ -4513,38 +4444,46 @@
         select.addEventListener('change', handleRankChange);
       });
     }
+    // 모드별 섹션 ID와 활성 버튼 색상 (.mode-btn.active CSS가 없으므로 인라인 색상으로 표시)
+    const MODES = {
+      'input': { sectionId: 'input-mode-section', activeColor: '#28a745' },
+      'query': { sectionId: 'query-mode-section', activeColor: '#28a745' },
+      'leaderboard': { sectionId: 'leaderboard-mode-section', activeColor: '#007bff' },
+      'rank-graph': { sectionId: 'rank-graph-mode-section', activeColor: '#9c27b0' },
+      'bulk-input': { sectionId: 'bulk-input-mode-section', activeColor: '#ffc107' }
+    };
+    const INACTIVE_MODE_COLOR = '#6c757d';
+
     function switchMode(mode) {
-      // 모든 섹션 숨기기
-      const inputSection = document.getElementById('input-mode-section');
-      const querySection = document.getElementById('query-mode-section');
-      const leaderboardSection = document.getElementById('leaderboard-mode-section');
-      const rankGraphSection = document.getElementById('rank-graph-mode-section');
-      const bulkSection = document.getElementById('bulk-input-mode-section');
+      // 모든 섹션 숨기고 모든 버튼을 비활성 상태로
+      Object.keys(MODES).forEach(key => {
+        const section = document.getElementById(MODES[key].sectionId);
+        if (section) section.style.display = 'none';
 
-      if (inputSection) inputSection.style.display = 'none';
-      if (querySection) querySection.style.display = 'none';
-      if (leaderboardSection) leaderboardSection.style.display = 'none';
-      if (rankGraphSection) rankGraphSection.style.display = 'none';
-      if (bulkSection) bulkSection.style.display = 'none';
+        const btn = document.getElementById(`${key}-mode-btn`);
+        if (btn) {
+          btn.classList.remove('active');
+          btn.style.background = INACTIVE_MODE_COLOR;
+        }
+      });
 
-      // 모드 버튼 활성화 상태 업데이트
-      document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
-      const activeBtn = document.getElementById(`${mode}-mode-btn`);
-      if (activeBtn) activeBtn.classList.add('active');
+      const target = MODES[mode];
+      if (!target) {
+        console.warn('알 수 없는 모드:', mode);
+        return;
+      }
 
-      // 선택된 모드 보이기
-      if (mode === 'input' && inputSection) {
-        inputSection.style.display = 'block';
-      } else if (mode === 'query' && querySection) {
-        querySection.style.display = 'block';
-      } else if (mode === 'leaderboard' && leaderboardSection) {
-        leaderboardSection.style.display = 'block';
-      } else if (mode === 'rank-graph' && rankGraphSection) {
-        rankGraphSection.style.display = 'block';
-      } else if (mode === 'rank-graph' && rankGraphSection) {
-        rankGraphSection.style.display = 'block';
-      } else if (mode === 'bulk-input' && bulkSection) {
-        bulkSection.style.display = 'block';
+      const section = document.getElementById(target.sectionId);
+      if (section) section.style.display = 'block';
+
+      const btn = document.getElementById(`${mode}-mode-btn`);
+      if (btn) {
+        btn.classList.add('active');
+        btn.style.background = target.activeColor;
+      }
+
+      if (mode === 'query' && isAutoQuery) {
+        updateLoadingMessage('조회 모드로 전환했습니다. 경기 목록을 불러오는 중입니다...');
       }
     }
   </script>
