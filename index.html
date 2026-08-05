@@ -4432,15 +4432,17 @@
 
     function restoreInputs() {
       try {
-        // 저장된 값이 있으면 그것을 쓰고, 없으면 HTML의 value 속성(=input.defaultValue)을 그대로 둔다.
-        // (이전에는 저장값을 무시하고 매번 강제로 덮어써서 설정 필드가 무의미했다)
         const urlInput = document.getElementById('apps-script-url');
         const nameInput = document.getElementById('sheet-name');
 
-        const savedUrl = localStorage.getItem(STORAGE_KEYS.appsScriptUrl);
-        const savedName = localStorage.getItem(STORAGE_KEYS.sheetName);
+        // 웹앱 URL은 절대 localStorage에서 복원하지 않는다. URL은 배포할 때마다 바뀌고
+        // HTML의 value(=현재 배포)가 항상 정답이다. 예전에 저장된 옛 URL이 남아 있으면
+        // 옛 백엔드를 호출해 갱신 시 시트를 옛 구조로 되돌려버리므로, 저장값은 지워버린다.
+        localStorage.removeItem(STORAGE_KEYS.appsScriptUrl);
+        urlInput.value = urlInput.defaultValue; // HTML value 속성 = 현재 배포 URL
 
-        if (savedUrl) urlInput.value = savedUrl;
+        // 시트 이름은 배포와 무관하므로 저장값을 복원한다
+        const savedName = localStorage.getItem(STORAGE_KEYS.sheetName);
         if (savedName) nameInput.value = savedName;
         // gameTitle은 자동 생성되므로 복원하지 않음
       } catch (_) { }
@@ -4450,7 +4452,7 @@
       const save = (key, value) => {
         try { localStorage.setItem(key, value || ''); } catch (_) { }
       };
-      document.getElementById('apps-script-url').addEventListener('input', (e) => save(STORAGE_KEYS.appsScriptUrl, e.target.value));
+      // 웹앱 URL은 저장하지 않는다(위 restoreInputs 설명 참고). 시트 이름만 저장.
       document.getElementById('sheet-name').addEventListener('input', (e) => save(STORAGE_KEYS.sheetName, e.target.value));
       // gameTitle은 자동 생성되므로 자동 저장하지 않음
 
